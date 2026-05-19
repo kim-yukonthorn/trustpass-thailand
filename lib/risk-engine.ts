@@ -63,16 +63,50 @@ export function classifyWithLocalRules(request: RiskCheckRequest): RiskCheckResu
   const allSignals = Array.from(new Set(matches.flatMap((match) => displaySignalsForMatch(match.pattern.id, match.hits, combined)))).slice(0, 8);
   const actionSet = Array.from(new Set(matches.flatMap((match) => match.pattern.actions))).slice(0, 5);
 
+  const zhCategories: Record<string, string> = {
+    "Taxi overcharging": "出租车超额收费",
+    "Suspicious tour payment": "可疑旅游付款",
+    "Rental passport risk": "租赁护照扣押风险",
+    "Payment identity mismatch": "付款身份不符",
+    "Tuk-tuk detour or commission stop": "嘟嘟车绕道或佣金停留",
+    "Rental damage cash pressure": "租赁损坏现金压力",
+    "Fake casting or job luring": "虚假招聘/选角诈骗"
+  };
+
+  const zhWhy: Record<string, string> = {
+    "Taxi overcharging": "拒绝使用计价器或要求不合理固定价格是常见的游客超额收费信号。",
+    "Suspicious tour payment": "向个人账户全额预付、缺少营业执照信息或使用高压语言，可能表明存在虚假旅游或押金诈骗。",
+    "Rental passport risk": "如发生租赁纠纷，留下原护照可能造成被施压或被要求支付不明费用的风险。",
+    "Payment identity mismatch": "付款账户名称与商家不符，可能导致纠纷和退款困难。",
+    "Tuk-tuk detour or commission stop": "声称景点关闭并施压游客前往商店，可能是佣金式绕道或旅游陷阱的信号。",
+    "Rental damage cash pressure": "租赁损坏索赔无书面记录、收据或中立检验，可能造成施压并使纠纷难以解决。",
+    "Fake casting or job luring": "虚假招聘/试镜邀约、保密压力、受控交通及前往边境地区的旅行，是严重的诱骗风险信号。"
+  };
+
+  const zhActions: Record<string, string[]> = {
+    "Taxi overcharging": ["如感不适，请移至公共安全区域。", "乘车前要求司机开计价器。", "保存车牌、上车地点、时间及报价。"],
+    "Suspicious tour payment": ["在运营商提供注册或营业执照信息之前，请勿付款。", "索取正式收据及取消政策。", "通过酒店或可信平台核实运营商身份。"],
+    "Rental passport risk": ["要求改用护照复印件加押金方式。", "使用前从各角度拍摄车辆照片。", "保留租赁合同及收据。"],
+    "Payment identity mismatch": ["付款前确认账户属于该商家。", "索取正式收据。", "避免向个人账户大额预付。"],
+    "Tuk-tuk detour or commission stop": ["通过官网、酒店工作人员或地图确认景点是否开放。", "如非计划内，拒绝绕道前往商店。", "乘车前约定目的地及价格。"],
+    "Rental damage cash pressure": ["移至公共区域，未取得书面收据前不要支付现金。", "要求拍照、提供合同条款及中立检验。", "如受施压，请联系酒店工作人员、旅游警察1155或保险公司。"],
+    "Fake casting or job luring": ["请勿跟随司机或前往约见地点。", "留在公共场所，联系酒店、旅游警察1155或大使馆。", "保存聊天截图、电话号码、头像名称、车辆信息及上车地点。"]
+  };
+
+  const displayCategory = isChinese ? (zhCategories[strongest.category] ?? strongest.category) : strongest.category;
+  const displayWhy = isChinese ? (zhWhy[strongest.category] ?? strongest.why) : strongest.why;
+  const displayActions = isChinese ? (zhActions[strongest.category] ?? actionSet) : actionSet;
+
   return {
     risk_level: strongest.riskLevel,
-    category: strongest.category,
+    category: displayCategory,
     suspicious_signals: allSignals,
-    why_it_matters: strongest.why,
-    safe_next_steps: actionSet,
+    why_it_matters: displayWhy,
+    safe_next_steps: displayActions,
     thai_phrase: strongest.thaiPhrase,
     evidence_to_save: evidenceFor(strongest.category, isChinese),
     contact_recommendation: contactFor(strongest.riskLevel, isChinese),
-    incident_report_summary: buildReport(strongest.category, strongest.riskLevel, request.city, allSignals, isChinese),
+    incident_report_summary: buildReport(displayCategory, strongest.riskLevel, request.city, allSignals, isChinese),
     source: "local-demo"
   };
 }

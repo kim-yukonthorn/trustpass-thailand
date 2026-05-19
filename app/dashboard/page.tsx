@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, BarChart3, AlertTriangle, MapPin, Activity, ShieldAlert } from "lucide-react";
 import { SiteNav } from "@/components/SiteNav";
 import { ThailandHeatmap } from "@/components/ThailandHeatmap";
+import { useLanguage } from "@/lib/language-context";
+import { translations } from "@/lib/translations";
 
 type IntelligenceReport = {
   id: string;
@@ -49,6 +51,8 @@ type IntelligenceData = {
 const SESSION_CASES_KEY = "trustpass-session-cases";
 
 export default function DashboardPage() {
+  const { lang } = useLanguage();
+  const t = translations[lang];
   const [data, setData] = useState<IntelligenceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -81,9 +85,9 @@ export default function DashboardPage() {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
+    if (diffMins < 60) return t.timeAgoMins(diffMins);
+    if (diffHours < 24) return t.timeAgoHours(diffHours);
+    return t.timeAgoDays(diffDays);
   };
 
   const getRiskBadgeColor = (level: string) => {
@@ -103,26 +107,26 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-5">
           <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-azure hover:text-fluent-blueDark">
             <ArrowLeft className="h-4 w-4" />
-            Back to overview
+            {t.backToOverview}
           </Link>
-          
+
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
             </span>
-            Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {t.dashboardUpdated} {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
 
         <header className="rounded-[8px] border border-slate-200 bg-white p-6 shadow-sm mb-6">
           <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-azure">
             <Activity className="h-4 w-4" />
-            Real-time Threat Intelligence
+            {t.dashboardKicker}
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-ink">B2G Dashboard</h1>
+          <h1 className="mt-2 text-3xl font-bold text-ink">{t.dashboardH1}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Live aggregated Caution, High, and Emergency signals from tourist risk-checks across Thailand. Used by TAT and Tourist Police to monitor hotspots, identify emerging scam patterns, and deploy preventive resources.
+            {t.dashboardDesc}
           </p>
         </header>
 
@@ -136,30 +140,30 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div className="bg-white p-5 rounded-[8px] border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-slate-500">Tracked Cases (7d)</h3>
+                  <h3 className="text-sm font-medium text-slate-500">{t.dashboardTrackedCases}</h3>
                   <BarChart3 className="h-4 w-4 text-slate-400" />
                 </div>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{data.kpis.totalChecks7d}</p>
               </div>
               <div className="bg-white p-5 rounded-[8px] border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-slate-500">Emergency Cases (7d)</h3>
+                  <h3 className="text-sm font-medium text-slate-500">{t.dashboardEmergencyCases}</h3>
                   <AlertTriangle className="h-4 w-4 text-red-500" />
                 </div>
                 <p className="mt-2 text-3xl font-bold text-red-600">{data.kpis.emergencyCount7d}</p>
               </div>
               <div className="bg-white p-5 rounded-[8px] border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-slate-500">Top Scam Category</h3>
+                  <h3 className="text-sm font-medium text-slate-500">{t.dashboardTopCategory}</h3>
                   <ShieldAlert className="h-4 w-4 text-slate-400" />
                 </div>
                 <p className="mt-2 text-xl font-bold text-slate-900 truncate" title={data.kpis.topCategory}>
-                  {data.kpis.topCategory.replace(/_/g, ' ')}
+                  {t.dashboardCategoryLabels[data.kpis.topCategory] ?? data.kpis.topCategory.replace(/_/g, ' ')}
                 </p>
               </div>
               <div className="bg-white p-5 rounded-[8px] border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-slate-500">Most Affected City</h3>
+                  <h3 className="text-sm font-medium text-slate-500">{t.dashboardMostAffectedCity}</h3>
                   <MapPin className="h-4 w-4 text-slate-400" />
                 </div>
                 <p className="mt-2 text-xl font-bold text-slate-900">{data.kpis.mostAffectedCity}</p>
@@ -167,16 +171,16 @@ export default function DashboardPage() {
             </div>
 
             <div className="mb-6 rounded-[8px] border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-              <span className="font-bold">{data.kpis.sessionChecks || 0} session checks</span>
+              <span className="font-bold">{data.kpis.sessionChecks || 0} {t.dashboardSessionChecksLabel}</span>
               <span className="ml-2 text-blue-700">
-                with Caution or higher risk are included in this browser session.
+                {t.dashboardSessionIncluded}
               </span>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Heatmap */}
               <div className="lg:col-span-1 bg-white p-5 rounded-[8px] border border-slate-200 shadow-sm flex flex-col items-center">
-                <h2 className="text-lg font-bold text-ink w-full mb-4">Risk Heatmap</h2>
+                <h2 className="text-lg font-bold text-ink w-full mb-4">{t.dashboardRiskHeatmap}</h2>
                 <div className="w-full max-w-sm">
                   <ThailandHeatmap cityStats={data.cityStats} />
                 </div>
@@ -185,17 +189,17 @@ export default function DashboardPage() {
               {/* Recent Reports */}
               <div className="lg:col-span-2 bg-white p-5 rounded-[8px] border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold text-ink">Recent Live Reports</h2>
-                  <span className="text-xs text-slate-500">Showing last 10</span>
+                  <h2 className="text-lg font-bold text-ink">{t.dashboardRecentReports}</h2>
+                  <span className="text-xs text-slate-500">{t.dashboardShowingLast10}</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-slate-200">
                     <thead className="bg-slate-50">
                       <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Time</th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">City</th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Category</th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Risk Level</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{t.dashboardColTime}</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{t.dashboardColCity}</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{t.dashboardColCategory}</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{t.dashboardColRiskLevel}</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-200">
@@ -208,11 +212,11 @@ export default function DashboardPage() {
                             {report.city}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-600">
-                            {report.category.replace(/_/g, ' ')}
+                            {t.dashboardCategoryLabels[report.category] ?? report.category.replace(/_/g, ' ')}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getRiskBadgeColor(report.risk_level)}`}>
-                              {report.risk_level}
+                              {t.riskLevels[report.risk_level] ?? report.risk_level}
                             </span>
                           </td>
                         </tr>

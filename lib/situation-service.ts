@@ -62,6 +62,10 @@ export async function analyzeSituation(input: SituationAnalyzeRequest, options: 
     payload
   );
 
+  if (hasDefinitiveGrounding(grounding)) {
+    return toCompletedResponse(fallback);
+  }
+
   const result = applyGroundingRiskAdjustments(
     await completeWithAzure(payload, fallback, grounding),
     grounding,
@@ -463,6 +467,16 @@ function toCompletedResponse(result: RiskCheckResult): SituationAnalyzeResponse 
   };
 }
 
+function hasDefinitiveGrounding(grounding: NonNullable<RiskCheckResult["grounding"]>): boolean {
+  return grounding.some((s) =>
+    s.tool === "job_lure_reference" ||
+    s.tool === "rental_document_reference" ||
+    s.tool === "damage_claim_reference" ||
+    (s.tool === "fare_reference" && (s.metadata?.fare_position === "above" || s.metadata?.fare_position === "far_above")) ||
+    (s.tool === "food_price_reference" && (s.metadata?.price_position === "above" || s.metadata?.price_position === "far_above"))
+  );
+}
+
 function applyGroundingRiskAdjustments(
   result: RiskCheckResult,
   grounding: NonNullable<RiskCheckResult["grounding"]>,
@@ -522,37 +536,65 @@ function getTaxiFareRiskResult(
   const highRisk = farePosition === "far_above" || ratio >= 3 || (hasMeterRefusal && ratio >= 2);
   const riskLevel = highRisk ? "High" : "Caution";
   const baselineText = `${baseline[0]}-${baseline[1]} THB`;
-  const ratioSignal =
-    ratio >= 3
-      ? `Extreme fixed fare quote about ${ratio}x above route baseline`
-      : `Quoted fare is about ${ratio}x above route baseline`;
+  const isChinese = request.language === "Chinese";
+  const ratioSignal = isChinese
+    ? (ratio >= 3
+        ? `报价约为路线基准的${ratio}倍，远超正常范围`
+        : `报价约为路线基准的${ratio}倍`)
+    : (ratio >= 3
+        ? `Extreme fixed fare quote about ${ratio}x above route baseline`
+        : `Quoted fare is about ${ratio}x above route baseline`);
 
   return {
     ...result,
     risk_level: riskLevel,
-    category: highRisk ? "Taxi fare far above route baseline" : "Taxi fare verification",
+    category: isChinese
+      ? (highRisk ? "出租车费用远超路线基准" : "出租车费用核实")
+      : (highRisk ? "Taxi fare far above route baseline" : "Taxi fare verification"),
     suspicious_signals: Array.from(new Set([...(result.suspicious_signals || []), ratioSignal])).slice(0, 8),
-    why_it_matters:
-      `${quotedFare} THB is about ${ratio}x the upper end of the local route baseline (${baselineText}). ` +
-      (highRisk
-        ? "That gap is large enough to treat the fare as a strong overcharging signal, especially if the meter is unavailable or the price is fixed before the ride."
-        : "That is higher than the reference, but not extreme by itself; verify the route, meter, tolls, and waiting-time explanation before riding."),
-    safe_next_steps: highRisk
-      ? [
-          "Decline the ride if the driver will not use the meter or explain the fare clearly.",
-          "Use a trusted ride-hailing app, hotel taxi desk, or another taxi.",
-          "Save the plate, pickup point, destination, time, and quoted fare if pressure continues."
-        ]
-      : [
-          "Ask whether the fare includes tolls, heavy waiting time, or a special route.",
-          "Request the meter or compare against a trusted ride-hailing estimate.",
-          "Choose another taxi or app ride if the quote still feels unclear."
-        ],
+    why_it_matters: isChinese
+      ? `${quotedFare} 泰铢约为当地路线基准上限（${baselineText}）的 ${ratio} 倍。` +
+        (highRisk
+          ? "差距如此之大，可视为强烈的超额收费信号，尤其是在司机拒绝使用计价器或提前固定价格的情况下。"
+          : "虽高于参考值，但单独来看并非极端情况；乘车前请核实路线、计价器、过路费及等待时间说明。")
+      : `${quotedFare} THB is about ${ratio}x the upper end of the local route baseline (${baselineText}). ` +
+        (highRisk
+          ? "That gap is large enough to treat the fare as a strong overcharging signal, especially if the meter is unavailable or the price is fixed before the ride."
+          : "That is higher than the reference, but not extreme by itself; verify the route, meter, tolls, and waiting-time explanation before riding."),
+    safe_next_steps: isChinese
+      ? (highRisk
+          ? [
+              "如司机拒绝使用计价器或无法说明价格，请拒绝乘坐。",
+              "改用可信的网约车应用、酒店出租车台或其他出租车。",
+              "如受到施压，请保存车牌、上车地点、目的地、时间及报价。"
+            ]
+          : [
+              "询问费用是否包含过路费、长时间等待或特殊路线。",
+              "要求使用计价器，或与可信的网约车报价进行比较。",
+              "如报价仍感不明，选择其他出租车或网约车。"
+            ])
+      : (highRisk
+          ? [
+              "Decline the ride if the driver will not use the meter or explain the fare clearly.",
+              "Use a trusted ride-hailing app, hotel taxi desk, or another taxi.",
+              "Save the plate, pickup point, destination, time, and quoted fare if pressure continues."
+            ]
+          : [
+              "Ask whether the fare includes tolls, heavy waiting time, or a special route.",
+              "Request the meter or compare against a trusted ride-hailing estimate.",
+              "Choose another taxi or app ride if the quote still feels unclear."
+            ]),
     thai_phrase: hasMeterRefusal ? "กรุณาเปิดมิเตอร์ครับ/ค่ะ" : "ราคานี้รวมค่าทางด่วนหรือค่ารอไหมครับ/ค่ะ",
-    evidence_to_save: ["Quoted fare", "Pickup and destination", "Taxi plate if safe", "Time and location"],
-    contact_recommendation: highRisk
-      ? "Use another transport option first. Contact hotel staff or Tourist Police 1155 only if you are pressured, threatened, blocked from leaving, or already harmed."
-      : "No police escalation is recommended. Verify calmly or choose another ride.",
+    evidence_to_save: isChinese
+      ? ["报价金额", "上下车地点", "车牌号（如安全可记录）", "时间及地点"]
+      : ["Quoted fare", "Pickup and destination", "Taxi plate if safe", "Time and location"],
+    contact_recommendation: isChinese
+      ? (highRisk
+          ? "优先选择其他交通方式。仅在受到施压、威胁、被阻止离开或已遭受损失时，才联系酒店工作人员或旅游警察1155。"
+          : "无需报警。冷静核实或选择另一辆出租车即可。")
+      : (highRisk
+          ? "Use another transport option first. Contact hotel staff or Tourist Police 1155 only if you are pressured, threatened, blocked from leaving, or already harmed."
+          : "No police escalation is recommended. Verify calmly or choose another ride."),
     incident_report_summary: {
       english: `TrustPass taxi check in ${request.city}: ${riskLevel} risk. The quoted ${quotedFare} THB fare is about ${ratio}x above the ${baselineText} route baseline.`,
       thai: `รายงาน TrustPass ในพื้นที่ ${request.city}: ระดับ ${riskLevel} ค่าโดยสาร ${quotedFare} บาทสูงกว่าช่วงอ้างอิง ${baselineText} ประมาณ ${ratio} เท่า`
@@ -583,6 +625,8 @@ function getDamageClaimRiskResult(
 
   if (amount === null && result.risk_level !== "High") return null;
 
+  const isChinese = request.language === "Chinese";
+
   if (
     amount !== null &&
     ratio !== null &&
@@ -595,18 +639,29 @@ function getDamageClaimRiskResult(
     return {
       ...result,
       risk_level: "Low",
-      category: "Normal rental damage documentation",
+      category: isChinese ? "正常租赁损坏记录" : "Normal rental damage documentation",
       suspicious_signals: [],
-      why_it_matters:
-        `${amount.toLocaleString("en-US")} THB is within the low demo range for a minor rental damage claim. No immediate cash pressure, receipt refusal, or instruction to avoid a neutral process was detected.`,
-      safe_next_steps: [
-        "Ask for a written estimate or receipt before paying.",
-        "Compare the claim against your before-use photos and rental contract.",
-        "Keep the receipt and damage photo for your records."
-      ],
+      why_it_matters: isChinese
+        ? `${amount.toLocaleString("en-US")} 泰铢在轻微租赁损坏索赔的低风险示范范围内。未检测到立即现金压力、拒绝提供收据或指示规避中立流程的信号。`
+        : `${amount.toLocaleString("en-US")} THB is within the low demo range for a minor rental damage claim. No immediate cash pressure, receipt refusal, or instruction to avoid a neutral process was detected.`,
+      safe_next_steps: isChinese
+        ? [
+            "付款前索取书面估价或收据。",
+            "将索赔金额与您的使用前照片及租赁合同进行比对。",
+            "保留收据和损坏照片以备记录。"
+          ]
+        : [
+            "Ask for a written estimate or receipt before paying.",
+            "Compare the claim against your before-use photos and rental contract.",
+            "Keep the receipt and damage photo for your records."
+          ],
       thai_phrase: "ขอใบเสร็จหรือใบแจ้งค่าเสียหายเป็นลายลักษณ์อักษรได้ไหมครับ/ค่ะ",
-      evidence_to_save: ["Receipt or written estimate", "Damage photo", "Rental contract", "Before-use photos"],
-      contact_recommendation: "No escalation recommended. Treat this as a documentation check unless pressure, receipt refusal, passport leverage, or threats appear.",
+      evidence_to_save: isChinese
+        ? ["收据或书面估价", "损坏照片", "租赁合同", "使用前照片"]
+        : ["Receipt or written estimate", "Damage photo", "Rental contract", "Before-use photos"],
+      contact_recommendation: isChinese
+        ? "无需上报。将此视为正常文件核查；除非出现施压、拒绝提供收据、扣押护照或威胁行为，否则无需联系警方。"
+        : "No escalation recommended. Treat this as a documentation check unless pressure, receipt refusal, passport leverage, or threats appear.",
       incident_report_summary: {
         english: `TrustPass rental damage check in ${request.city}: Low risk. The ${amount.toLocaleString("en-US")} THB amount is within the low demo range and no pressure signal was detected.`,
         thai: `รายงาน TrustPass ในพื้นที่ ${request.city}: ระดับ Low จำนวน ${amount.toLocaleString("en-US")} บาทอยู่ในช่วงต่ำของตัวอย่างเดโม และไม่พบสัญญาณกดดัน`
@@ -616,32 +671,54 @@ function getDamageClaimRiskResult(
 
   const highRisk = hasLargeDemand || severity === "large" || severity === "extreme" || (hasNoReceipt && hasImmediateCash && severity === "elevated");
   const riskLevel = highRisk ? "High" : "Caution";
-  const amountSignal =
-    amount === null
-      ? "Rental damage claim needs written documentation"
-      : highRisk
-        ? `Damage demand is ${amount.toLocaleString("en-US")} THB, about ${ratio ?? "several"}x the demo minor-damage threshold`
-        : `Damage demand amount is modest but still needs written proof`;
+  const amountSignal = isChinese
+    ? (amount === null
+        ? "租赁损坏索赔需要书面记录"
+        : highRisk
+          ? `损坏索赔金额为 ${amount.toLocaleString("en-US")} 泰铢，约为轻微损坏参考值的${ratio ?? "数"}倍`
+          : `损坏索赔金额较小，但仍需书面证明`)
+    : (amount === null
+        ? "Rental damage claim needs written documentation"
+        : highRisk
+          ? `Damage demand is ${amount.toLocaleString("en-US")} THB, about ${ratio ?? "several"}x the demo minor-damage threshold`
+          : `Damage demand amount is modest but still needs written proof`);
 
   return {
     ...result,
     risk_level: riskLevel,
-    category: highRisk ? "Rental damage cash pressure" : "Rental damage verification",
+    category: isChinese
+      ? (highRisk ? "租赁损坏现金压力" : "租赁损坏核实")
+      : (highRisk ? "Rental damage cash pressure" : "Rental damage verification"),
     suspicious_signals: Array.from(new Set([...(result.suspicious_signals || []), amountSignal])).slice(0, 8),
-    why_it_matters:
-      amount === null
-        ? "The situation contains rental damage pressure signals. The safest path is to document the claim before paying."
-        : `${amount.toLocaleString("en-US")} THB is treated as ${severity} for this demo's rental-damage heuristic. The risk increases when a cash demand is combined with no receipt, no written estimate, or pressure to avoid a neutral process.`,
-    safe_next_steps: [
-      "Ask for a written damage estimate, itemized receipt, and photos showing the claimed damage.",
-      "Compare the claim against the rental contract and your before-use photos.",
-      highRisk ? "Do not hand over large cash under pressure; ask hotel staff, platform support, insurer, or Tourist Police 1155 if blocked or threatened." : "Pay only after the amount and receipt are clear."
-    ],
+    why_it_matters: isChinese
+      ? (amount === null
+          ? "该情况包含租赁损坏压力信号。最安全的做法是在付款前记录索赔内容。"
+          : `${amount.toLocaleString("en-US")} 泰铢在本示范的租赁损坏启发算法中被视为"${severity}"级别。当现金索赔与无收据、无书面估价或被指示规避中立流程相结合时，风险会进一步升高。`)
+      : (amount === null
+          ? "The situation contains rental damage pressure signals. The safest path is to document the claim before paying."
+          : `${amount.toLocaleString("en-US")} THB is treated as ${severity} for this demo's rental-damage heuristic. The risk increases when a cash demand is combined with no receipt, no written estimate, or pressure to avoid a neutral process.`),
+    safe_next_steps: isChinese
+      ? [
+          "要求提供书面损坏估价、逐项收据及显示损坏情况的照片。",
+          "将索赔与租赁合同及您的使用前照片进行比对。",
+          highRisk ? "切勿在压力下支付大额现金；如被阻止或受到威胁，请联系酒店工作人员、平台客服、保险公司或旅游警察1155。" : "金额和收据明确后再付款。"
+        ]
+      : [
+          "Ask for a written damage estimate, itemized receipt, and photos showing the claimed damage.",
+          "Compare the claim against the rental contract and your before-use photos.",
+          highRisk ? "Do not hand over large cash under pressure; ask hotel staff, platform support, insurer, or Tourist Police 1155 if blocked or threatened." : "Pay only after the amount and receipt are clear."
+        ],
     thai_phrase: "ขอใบแจ้งค่าเสียหายเป็นลายลักษณ์อักษรและใบเสร็จก่อนครับ/ค่ะ",
-    evidence_to_save: ["Before/after photos", "Rental contract", "Damage quote", "Receipt", "Shop name", "Passport/deposit terms"],
-    contact_recommendation: highRisk
-      ? "Pause payment and ask hotel staff, platform support, or insurer for help. Contact Tourist Police 1155 if pressured, threatened, blocked, or if your passport is being used as leverage."
-      : "No police escalation is recommended from amount alone. Get documentation first and involve hotel/platform support if the shop refuses.",
+    evidence_to_save: isChinese
+      ? ["使用前后对比照片", "租赁合同", "损坏报价单", "收据", "店铺名称", "护照/押金条款"]
+      : ["Before/after photos", "Rental contract", "Damage quote", "Receipt", "Shop name", "Passport/deposit terms"],
+    contact_recommendation: isChinese
+      ? (highRisk
+          ? "暂停付款，联系酒店工作人员、平台客服或保险公司寻求帮助。如受到施压、威胁、被阻止离开或护照被用作筹码，请联系旅游警察1155。"
+          : "仅凭金额无需报警。优先获取书面文件；如商店拒绝配合，联系酒店或平台客服协助。")
+      : (highRisk
+          ? "Pause payment and ask hotel staff, platform support, or insurer for help. Contact Tourist Police 1155 if pressured, threatened, blocked, or if your passport is being used as leverage."
+          : "No police escalation is recommended from amount alone. Get documentation first and involve hotel/platform support if the shop refuses."),
     incident_report_summary: {
       english: `TrustPass rental damage check in ${request.city}: ${riskLevel} risk${amount ? ` for a ${amount.toLocaleString("en-US")} THB damage demand` : ""}. Documentation and neutral review are recommended before payment.`,
       thai: `รายงาน TrustPass ในพื้นที่ ${request.city}: ระดับ ${riskLevel}${amount ? ` สำหรับการเรียกค่าเสียหาย ${amount.toLocaleString("en-US")} บาท` : ""} ควรขอเอกสารและตรวจสอบอย่างเป็นกลางก่อนชำระเงิน`
@@ -660,28 +737,41 @@ function getRentalDocumentRiskResult(
   const interpretedSignals = Array.isArray(rentalSignal.metadata?.interpreted_signals)
     ? rentalSignal.metadata.interpreted_signals.filter((signal): signal is string => typeof signal === "string")
     : [];
+  const isChinese = request.language === "Chinese";
+  const passportSignal = isChinese ? "要求以原护照作为押金" : "Original passport requested as deposit";
   const signals = Array.from(new Set([
     ...interpretedSignals,
-    "Original passport requested as deposit"
+    passportSignal
   ])).slice(0, 8);
 
   return {
     ...result,
     risk_level: "High",
-    category: "Rental passport retention risk",
+    category: isChinese ? "租赁护照扣押风险" : "Rental passport retention risk",
     suspicious_signals: signals,
-    why_it_matters:
-      "A tourist's original passport is a critical identity document. If a rental operator keeps it as a deposit, the tourist can lose leverage during disputes or be pressured to pay unclear fees before the passport is returned.",
-    safe_next_steps: [
-      "Do not leave your original passport as a deposit.",
-      "Offer a passport copy plus a written cash/card deposit receipt instead.",
-      "Photograph the vehicle condition, contract, shop name, and deposit terms before using the rental.",
-      "If the passport is already being held and the shop refuses to return it, ask hotel staff, platform support, embassy, or Tourist Police 1155 for help."
-    ],
+    why_it_matters: isChinese
+      ? "原护照是游客的重要身份证件。如果租赁经营者将其作为押金扣押，游客在发生纠纷时将失去主动权，或被迫在取回护照前支付不明费用。"
+      : "A tourist's original passport is a critical identity document. If a rental operator keeps it as a deposit, the tourist can lose leverage during disputes or be pressured to pay unclear fees before the passport is returned.",
+    safe_next_steps: isChinese
+      ? [
+          "不要将原护照留作押金。",
+          "改为提供护照复印件，并附上书面现金/刷卡押金收据。",
+          "在使用租赁物品前，拍摄车辆状况、合同、店铺名称及押金条款的照片。",
+          "如护照已被扣押且商店拒绝归还，请联系酒店工作人员、平台客服、大使馆或旅游警察1155寻求帮助。"
+        ]
+      : [
+          "Do not leave your original passport as a deposit.",
+          "Offer a passport copy plus a written cash/card deposit receipt instead.",
+          "Photograph the vehicle condition, contract, shop name, and deposit terms before using the rental.",
+          "If the passport is already being held and the shop refuses to return it, ask hotel staff, platform support, embassy, or Tourist Police 1155 for help."
+        ],
     thai_phrase: "ขอใช้สำเนาพาสปอร์ตแทนตัวจริง และขอใบเสร็จเงินมัดจำได้ไหมครับ/ค่ะ",
-    evidence_to_save: ["Rental contract", "Passport/deposit clause", "Shop name and location", "Deposit receipt", "Before-use vehicle photos"],
-    contact_recommendation:
-      "Avoid handing over the original passport. If it is already being withheld or used as leverage, ask hotel staff, platform support, embassy, or Tourist Police 1155 for help.",
+    evidence_to_save: isChinese
+      ? ["租赁合同", "护照/押金条款", "店铺名称及位置", "押金收据", "使用前车辆照片"]
+      : ["Rental contract", "Passport/deposit clause", "Shop name and location", "Deposit receipt", "Before-use vehicle photos"],
+    contact_recommendation: isChinese
+      ? "避免交出原护照。如护照已被扣押或被用作筹码，请联系酒店工作人员、平台客服、大使馆或旅游警察1155寻求帮助。"
+      : "Avoid handing over the original passport. If it is already being withheld or used as leverage, ask hotel staff, platform support, embassy, or Tourist Police 1155 for help.",
     incident_report_summary: {
       english: `TrustPass rental document check in ${request.city}: High risk because an original passport is requested or held as a rental deposit.`,
       thai: `รายงาน TrustPass ในพื้นที่ ${request.city}: ระดับ High เนื่องจากมีการขอหรือถือพาสปอร์ตตัวจริงเป็นหลักประกันการเช่า`
@@ -702,34 +792,73 @@ function getJobLureRiskResult(
     : [];
   const highRisk = hasHighRiskJobLureSignal(grounding);
   const riskLevel = highRisk ? "Emergency" : "Caution";
+  const isChinese = request.language === "Chinese";
+
+  const zhSignalMap: Record<string, string> = {
+    "Job or casting offer from informal channel": "非正规渠道的工作或试镜邀约",
+    "Controlled pickup or free transport offered": "提供受控接送或免费交通",
+    "Travel toward Mae Sot, Myanmar, or border area": "前往美索、缅甸或边境地区",
+    "Secrecy or isolation instruction": "要求保密或隔离",
+    "Passport or phone handling requested": "要求交出护照或手机",
+    "Upfront fee or payment requested": "要求提前付费或押金"
+  };
+
+  const translatedSignals = isChinese
+    ? interpretedSignals.map((s) => zhSignalMap[s] ?? s)
+    : interpretedSignals;
 
   return {
     ...result,
     risk_level: riskLevel,
-    category: highRisk ? "Fake casting or job luring" : "Job/casting invitation verification",
-    suspicious_signals: Array.from(new Set(interpretedSignals)).slice(0, 8),
-    why_it_matters: highRisk
-      ? "The offer contains luring signals such as controlled pickup, secrecy, border-area travel, document/phone handling, or payment pressure. Those signals can create immediate personal safety risk for tourists."
-      : "A street job or casting invitation is not automatically an emergency, but it should be verified before you follow anyone, travel to a second location, pay a fee, or share documents.",
-    safe_next_steps: highRisk
-      ? [
-          "Do not get into a private vehicle or travel to a second location.",
-          "Stay in a public place and contact hotel staff, Tourist Police 1155, or your embassy if pressured.",
-          "Save the profile name, phone number, chat screenshots, pickup point, and vehicle details if safe."
-        ]
-      : [
-          "Do not go to a private location or vehicle based only on a street invitation.",
-          "Ask for the company name, official website, office address, and written casting details.",
-          "Verify with hotel staff or a trusted local contact before continuing.",
-          "Do not hand over your passport, phone, or any upfront fee."
-        ],
+    category: isChinese
+      ? (highRisk ? "虚假招聘/选角诈骗" : "招聘/选角邀约核实")
+      : (highRisk ? "Fake casting or job luring" : "Job/casting invitation verification"),
+    suspicious_signals: Array.from(new Set(translatedSignals)).slice(0, 8),
+    why_it_matters: isChinese
+      ? (highRisk
+          ? "该邀约包含诱骗信号，如受控接送、要求保密、前往边境地区、交出证件或手机、付款压力等。这些信号可能对游客造成直接的人身安全威胁。"
+          : "街头招聘或试镜邀约并非立即构成紧急情况，但在跟随任何人、前往第二地点、支付费用或分享证件之前，应先进行核实。")
+      : (highRisk
+          ? "The offer contains luring signals such as controlled pickup, secrecy, border-area travel, document/phone handling, or payment pressure. Those signals can create immediate personal safety risk for tourists."
+          : "A street job or casting invitation is not automatically an emergency, but it should be verified before you follow anyone, travel to a second location, pay a fee, or share documents."),
+    safe_next_steps: isChinese
+      ? (highRisk
+          ? [
+              "请勿上私家车或前往第二地点。",
+              "留在公共场所，如受到压力请联系酒店工作人员、旅游警察1155或您的大使馆/领事馆。",
+              "如安全允许，保存对方头像名称、电话号码、聊天截图、接送地点和车辆信息。"
+            ]
+          : [
+              "不要仅凭街头邀请前往私人地点或上私家车。",
+              "要求提供公司名称、官方网站、办公地址及书面试镜详情。",
+              "在继续前，请向酒店工作人员或当地可信联系人核实。",
+              "不要交出护照、手机或任何预付费用。"
+            ])
+      : (highRisk
+          ? [
+              "Do not get into a private vehicle or travel to a second location.",
+              "Stay in a public place and contact hotel staff, Tourist Police 1155, or your embassy if pressured.",
+              "Save the profile name, phone number, chat screenshots, pickup point, and vehicle details if safe."
+            ]
+          : [
+              "Do not go to a private location or vehicle based only on a street invitation.",
+              "Ask for the company name, official website, office address, and written casting details.",
+              "Verify with hotel staff or a trusted local contact before continuing.",
+              "Do not hand over your passport, phone, or any upfront fee."
+            ]),
     thai_phrase: highRisk
       ? "ฉันไม่สะดวกเดินทางไปตามนัดแล้ว และต้องการติดต่อโรงแรมหรือตำรวจท่องเที่ยวก่อน"
       : "ขอข้อมูลบริษัทและสถานที่นัดอย่างเป็นทางการก่อนตัดสินใจครับ/ค่ะ",
-    evidence_to_save: ["Profile or business name", "Phone number or chat screenshot", "Meeting location", "Any pickup, fee, passport, phone, secrecy, or travel instruction"],
-    contact_recommendation: highRisk
-      ? "Stop and stay public. Contact hotel security, Tourist Police 1155, embassy/consulate, or emergency services if you feel pressured, followed, or unsafe."
-      : "No emergency escalation from the current information alone. Verify with hotel staff or a trusted local person before continuing; contact Tourist Police 1155 only if pressure, threats, controlled transport, secrecy, or document demands appear.",
+    evidence_to_save: isChinese
+      ? ["对方个人或公司名称", "电话号码或聊天截图", "约见地点", "接送、收费、护照、手机、保密或旅行指示等相关信息"]
+      : ["Profile or business name", "Phone number or chat screenshot", "Meeting location", "Any pickup, fee, passport, phone, secrecy, or travel instruction"],
+    contact_recommendation: isChinese
+      ? (highRisk
+          ? "立即停止行动，留在公共场所。如感到被施压、被跟踪或人身不安全，请联系酒店保安、旅游警察1155、大使馆/领事馆或紧急服务。"
+          : "根据现有信息，暂无需紧急上报。在继续行动或前往第二地点之前，请向酒店工作人员或当地可信人士核实；仅当出现压力、威胁、受控交通、保密要求或证件要求时，才联系旅游警察1155。")
+      : (highRisk
+          ? "Stop and stay public. Contact hotel security, Tourist Police 1155, embassy/consulate, or emergency services if you feel pressured, followed, or unsafe."
+          : "No emergency escalation from the current information alone. Verify with hotel staff or a trusted local person before continuing; contact Tourist Police 1155 only if pressure, threats, controlled transport, secrecy, or document demands appear."),
     incident_report_summary: {
       english: `TrustPass job/casting check in ${request.city}: ${riskLevel} risk. ${highRisk ? "The offer includes controlled or coercive luring signals." : "The invitation needs verification before the tourist follows instructions or travels to a second location."}`,
       thai: `รายงาน TrustPass ในพื้นที่ ${request.city}: ระดับ ${riskLevel} สำหรับการชวนไปงานหรือแคสติ้ง ${highRisk ? "พบสัญญาณการล่อลวงหรือการควบคุมการเดินทาง" : "ควรตรวจสอบข้อมูลก่อนเดินทางหรือทำตามคำชวน"}`
@@ -761,26 +890,42 @@ function getFoodPriceRiskResult(
     maxRatio !== null &&
     maxRatio > 2;
   const riskLevel = highRisk ? "High" : "Caution";
-  const ratioText = maxRatio ? `about ${maxRatio}x above` : pricePosition === "far_above" ? "far above" : "above";
+  const isChinese = request.language === "Chinese";
+  const ratioText = maxRatio
+    ? (isChinese ? `约高出${maxRatio}倍` : `about ${maxRatio}x above`)
+    : (pricePosition === "far_above" ? (isChinese ? "远超" : "far above") : (isChinese ? "高于" : "above"));
 
   return {
     ...groundedResult,
     risk_level: riskLevel,
-    category: highRisk ? "Food price far above local reference" : "Food price verification",
-    suspicious_signals: [
-      `Detected menu price ${highestPrice ?? "is"} THB is ${ratioText} the ${likelyTierLabel} reference band`
-    ],
-    why_it_matters:
-      `The price is higher than the curated Bangkok reference for ${likelyTierLabel} (${normalItemRange} THB per item). ${highRisk ? "The gap is unusually large for the stated venue tier, so verify the venue and displayed price before paying." : "This does not prove fraud, but the user should confirm the venue, displayed price, receipt, and service terms before paying."}`,
-    safe_next_steps: [
-      "Confirm the restaurant name and whether the menu belongs to the venue you are inside.",
-      "Ask staff to point to the official displayed price before ordering or paying.",
-      "Request an itemized receipt and keep a photo of the menu."
-    ],
+    category: isChinese
+      ? (highRisk ? "食物价格远超当地参考" : "食物价格核实")
+      : (highRisk ? "Food price far above local reference" : "Food price verification"),
+    suspicious_signals: isChinese
+      ? [`检测到菜单价格 ${highestPrice ?? ""} 泰铢，${ratioText} ${likelyTierLabel} 参考价格区间`]
+      : [`Detected menu price ${highestPrice ?? "is"} THB is ${ratioText} the ${likelyTierLabel} reference band`],
+    why_it_matters: isChinese
+      ? `该价格高于 ${likelyTierLabel} 的曼谷精选参考价格（每项 ${normalItemRange} 泰铢）。${highRisk ? "与所述场馆级别相比，差距异常之大，请在付款前核实场馆名称及显示价格。" : "这并不证明存在欺诈，但用户应在付款前确认场馆名称、显示价格、收据及服务条款。"}`
+      : `The price is higher than the curated Bangkok reference for ${likelyTierLabel} (${normalItemRange} THB per item). ${highRisk ? "The gap is unusually large for the stated venue tier, so verify the venue and displayed price before paying." : "This does not prove fraud, but the user should confirm the venue, displayed price, receipt, and service terms before paying."}`,
+    safe_next_steps: isChinese
+      ? [
+          "确认餐厅名称，以及您所在场馆的菜单是否属于该餐厅。",
+          "在点餐或付款前，请工作人员指出官方显示价格。",
+          "索取逐项收据并保留菜单照片。"
+        ]
+      : [
+          "Confirm the restaurant name and whether the menu belongs to the venue you are inside.",
+          "Ask staff to point to the official displayed price before ordering or paying.",
+          "Request an itemized receipt and keep a photo of the menu."
+        ],
     thai_phrase: "ขอดูราคาในเมนูอย่างเป็นทางการและขอใบเสร็จแบบแยกรายการได้ไหมครับ/ค่ะ",
-    contact_recommendation: highRisk
-      ? "Do not pay until the venue, item, and displayed price are confirmed. Ask hotel staff or venue management for help; contact Tourist Police 1155 only if pressured, blocked, or threatened."
-      : "Ask hotel staff for a second opinion if the venue or price display feels unclear. Contact Tourist Police 1155 only if pressured or threatened.",
+    contact_recommendation: isChinese
+      ? (highRisk
+          ? "在确认场馆、菜品及显示价格之前，请勿付款。如需帮助，请联系酒店工作人员或场馆管理层；仅在受到施压、被阻止或受到威胁时，才联系旅游警察1155。"
+          : "如场馆或价格显示不明，可向酒店工作人员寻求第二意见。仅在受到施压或威胁时，才联系旅游警察1155。")
+      : (highRisk
+          ? "Do not pay until the venue, item, and displayed price are confirmed. Ask hotel staff or venue management for help; contact Tourist Police 1155 only if pressured, blocked, or threatened."
+          : "Ask hotel staff for a second opinion if the venue or price display feels unclear. Contact Tourist Police 1155 only if pressured or threatened."),
     incident_report_summary: {
       english: `TrustPass food price check in ${request.city}: ${riskLevel} risk for menu price verification. The detected price is above the likely tier reference and should be confirmed with the venue before payment.`,
       thai: `รายงาน TrustPass ในพื้นที่ ${request.city}: ระดับ ${riskLevel} สำหรับการตรวจสอบราคาอาหาร ควรยืนยันราคากับร้านก่อนชำระเงิน`
@@ -1147,23 +1292,30 @@ function getNormalFoodPriceResult(
 
   if (confidence !== "high" || !highestPrice) return null;
 
+  const isChinese = request.language === "Chinese";
   const venueText = matchedVenue ? ` at ${matchedVenue}` : "";
+  const venueTextZh = matchedVenue ? `（${matchedVenue}）` : "";
 
   return {
     ...result,
     risk_level: "Low",
-    category: matchedVenue ? `${matchedVenue} price context` : "Premium restaurant price context",
+    category: isChinese
+      ? (matchedVenue ? `${matchedVenue} 价格背景` : "高档餐厅价格背景")
+      : (matchedVenue ? `${matchedVenue} price context` : "Premium restaurant price context"),
     suspicious_signals: [],
-    why_it_matters:
-      `${highestPrice} THB is within the curated Bangkok ${tierLabel} reference${venueText}. The expected band is about ${normalItemRange} THB per item or ${normalMealRange} THB per meal, and no payment mismatch, hidden fee, pressure, or bait-and-switch signal was detected.`,
-    safe_next_steps: [
-      "No scam signal is detected from the price alone.",
-      "Confirm the menu item and displayed price with staff before ordering.",
-      "Keep the receipt if you decide to pay."
-    ],
+    why_it_matters: isChinese
+      ? `${highestPrice} 泰铢在曼谷精选 ${tierLabel} 参考价格范围内${venueTextZh}。预期价格区间约为每项 ${normalItemRange} 泰铢或每餐 ${normalMealRange} 泰铢，未检测到付款不符、隐藏收费、施压或诱导换项信号。`
+      : `${highestPrice} THB is within the curated Bangkok ${tierLabel} reference${venueText}. The expected band is about ${normalItemRange} THB per item or ${normalMealRange} THB per meal, and no payment mismatch, hidden fee, pressure, or bait-and-switch signal was detected.`,
+    safe_next_steps: isChinese
+      ? ["仅凭价格未发现诈骗信号。", "点餐前向工作人员确认菜品及显示价格。", "如决定付款，请保留收据。"]
+      : ["No scam signal is detected from the price alone.", "Confirm the menu item and displayed price with staff before ordering.", "Keep the receipt if you decide to pay."],
     thai_phrase: "ขอยืนยันราคาเมนูนี้ก่อนสั่งอาหารครับ/ค่ะ",
-    evidence_to_save: ["Receipt or menu photo only if the final bill differs from the displayed price."],
-    contact_recommendation: "No escalation recommended. Ask staff to confirm the price if anything is unclear.",
+    evidence_to_save: isChinese
+      ? ["仅在最终账单与显示价格不符时，保留收据或菜单照片。"]
+      : ["Receipt or menu photo only if the final bill differs from the displayed price."],
+    contact_recommendation: isChinese
+      ? "无需上报。如有不明之处，向工作人员确认价格即可。"
+      : "No escalation recommended. Ask staff to confirm the price if anything is unclear.",
     incident_report_summary: {
       english: `TrustPass food price check in ${request.city}: Low risk. The ${highestPrice} THB price is within the ${tierLabel} reference${venueText}, and no suspicious payment or pressure signal was detected.`,
       thai: `รายงาน TrustPass ในพื้นที่ ${request.city}: ระดับ Low ราคา ${highestPrice} บาทอยู่ในช่วงอ้างอิงของ ${tierLabel}${matchedVenue ? ` (${matchedVenue})` : ""} และไม่พบสัญญาณกดดันหรือการชำระเงินที่น่าสงสัย`
@@ -1190,23 +1342,28 @@ function getNormalTaxiResult(
 
   if (farePosition !== "within_or_below" || suspiciousSignals.length > 0 || quotedFare === null) return null;
 
+  const isChinese = request.language === "Chinese";
   const baselineText = baseline?.length === 2 ? ` The local reference range for this route is about ${baseline[0]}-${baseline[1]} THB before heavy waiting time.` : "";
+  const baselineTextZh = baseline?.length === 2 ? `该路线当地参考价格约为 ${baseline[0]}-${baseline[1]} 泰铢（不含长时间等待费）。` : "";
 
   return {
     ...result,
     risk_level: "Low",
-    category: "Normal taxi fare",
+    category: isChinese ? "正常出租车费用" : "Normal taxi fare",
     suspicious_signals: [],
-    why_it_matters:
-      `${quotedFare} THB is within or below the Bangkok taxi fare grounding for the described route.${baselineText} No meter refusal, hidden fee, route diversion, pressure, or safety signal was detected.`,
-    safe_next_steps: [
-      "No special action is needed based on the fare alone.",
-      "Confirm the destination before getting in.",
-      "Pay the agreed fare or meter fare at the end of the ride."
-    ],
+    why_it_matters: isChinese
+      ? `${quotedFare} 泰铢在曼谷出租车接地数据所述路线参考范围内或以下。${baselineTextZh}未检测到拒绝使用计价器、隐藏收费、路线偏离、施压或安全信号。`
+      : `${quotedFare} THB is within or below the Bangkok taxi fare grounding for the described route.${baselineText} No meter refusal, hidden fee, route diversion, pressure, or safety signal was detected.`,
+    safe_next_steps: isChinese
+      ? ["仅凭费用无需采取特别行动。", "上车前确认目的地。", "行程结束后按约定或计价器价格付款。"]
+      : ["No special action is needed based on the fare alone.", "Confirm the destination before getting in.", "Pay the agreed fare or meter fare at the end of the ride."],
     thai_phrase: "ไปวัดโพธิ์ ราคา 50 บาท ใช่ไหมครับ/ค่ะ",
-    evidence_to_save: ["No evidence needed for a normal low-risk ride unless something changes."],
-    contact_recommendation: "No escalation recommended. Ask for help only if the driver changes the price, refuses the agreed route, or pressures you.",
+    evidence_to_save: isChinese
+      ? ["如情况发生变化，正常低风险行程无需留存证据。"]
+      : ["No evidence needed for a normal low-risk ride unless something changes."],
+    contact_recommendation: isChinese
+      ? "无需上报。仅在司机更改价格、拒绝约定路线或向您施压时，寻求帮助。"
+      : "No escalation recommended. Ask for help only if the driver changes the price, refuses the agreed route, or pressures you.",
     incident_report_summary: {
       english: `TrustPass taxi fare check in ${request.city}: Low risk. The quoted ${quotedFare} THB fare is within or below the local route reference and no suspicious signal was detected.`,
       thai: `รายงาน TrustPass ในพื้นที่ ${request.city}: ระดับ Low ค่าโดยสาร ${quotedFare} บาทอยู่ในช่วงปกติหรือต่ำกว่าช่วงอ้างอิง และไม่พบสัญญาณน่าสงสัย`

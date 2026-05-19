@@ -1,4 +1,8 @@
+"use client";
+
 import React, { useState } from 'react';
+import { useLanguage } from "@/lib/language-context";
+import { translations } from "@/lib/translations";
 
 interface CityPoint {
   name: string;
@@ -60,9 +64,11 @@ const normalizeRiskCounts = (counts?: Partial<RiskCounts>, emergency = 0): RiskC
   Emergency: counts?.Emergency ?? emergency,
 });
 
-const formatCategory = (category: string) => category.replace(/_/g, ' ');
-
 export function ThailandHeatmap({ cityStats }: ThailandHeatmapProps) {
+  const { lang } = useLanguage();
+  const t = translations[lang];
+  const formatCategory = (category: string) =>
+    t.dashboardCategoryLabels[category] ?? category.replace(/_/g, ' ');
   const [hoveredCity, setHoveredCity] = useState<CityPoint | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -238,10 +244,10 @@ export function ThailandHeatmap({ cityStats }: ThailandHeatmapProps) {
           <div className="font-bold text-slate-800">{hoveredCity.name}</div>
           <div className="text-xs text-slate-500 mb-1">{hoveredCity.nameTh}</div>
           <div className="grid grid-cols-2 gap-1 text-xs mt-2">
-            <span className="text-slate-600">Total Cases:</span>
+            <span className="text-slate-600">{t.heatmapTotalCases}:</span>
             <span className="font-semibold text-right">{hoveredCity.count}</span>
-            <span className="text-slate-600">Map status:</span>
-            <span className="font-semibold text-right">{hoveredCity.mapRiskLevel}</span>
+            <span className="text-slate-600">{t.heatmapMapStatus}:</span>
+            <span className="font-semibold text-right">{t.riskLevels[hoveredCity.mapRiskLevel] ?? hoveredCity.mapRiskLevel}</span>
           </div>
           <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[10px]">
             {([
@@ -251,16 +257,16 @@ export function ThailandHeatmap({ cityStats }: ThailandHeatmapProps) {
             ] as const).map(([level, className]) => (
               <div key={level} className={`rounded border border-slate-100 px-1 py-1 ${className}`}>
                 <div className="font-bold">{hoveredCity.riskCounts[level]}</div>
-                <div className="truncate">{level}</div>
+                <div className="truncate">{t.riskLevels[level] ?? level}</div>
               </div>
             ))}
           </div>
           <div className="mt-2 text-xs">
-            <span className="block text-slate-500">Top Issue:</span>
+            <span className="block text-slate-500">{t.heatmapTopIssue}:</span>
             <span className="block font-medium truncate">{formatCategory(hoveredCity.topCategory)}</span>
           </div>
           <div className="mt-2 text-xs">
-            <span className="block text-slate-500">All case types:</span>
+            <span className="block text-slate-500">{t.heatmapAllCaseTypes}:</span>
             <div className="mt-1 space-y-0.5">
               {Object.entries(hoveredCity.categoryCounts)
                 .sort((a, b) => b[1] - a[1])
@@ -273,7 +279,7 @@ export function ThailandHeatmap({ cityStats }: ThailandHeatmapProps) {
             </div>
           </div>
           <div className="mt-2 border-t border-slate-100 pt-1 text-[10px] text-slate-500">
-            Highest seen: {hoveredCity.maxRiskLevel}
+            {t.heatmapHighestSeen}: {t.riskLevels[hoveredCity.maxRiskLevel] ?? hoveredCity.maxRiskLevel}
             {hoveredCity.averageRiskScore > 0 ? ` · Avg score ${Math.round(hoveredCity.averageRiskScore)}` : ''}
           </div>
         </div>
@@ -281,11 +287,11 @@ export function ThailandHeatmap({ cityStats }: ThailandHeatmapProps) {
 
       {/* Legend */}
       <div className="absolute bottom-3 right-3 bg-white/90 p-2 rounded shadow-sm border border-slate-100 text-[10px] space-y-1">
-        <div className="font-semibold text-slate-600 mb-1">Tracked Risk</div>
-        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A4262C]"></div>Emergency</div>
-        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#D83B01]"></div>High</div>
-        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#FFB900]"></div>Caution</div>
-        <div className="mt-2 text-slate-400 border-t border-slate-100 pt-1">Size = Report Count</div>
+        <div className="font-semibold text-slate-600 mb-1">{t.heatmapTrackedRisk}</div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A4262C]"></div>{t.riskLevels.Emergency}</div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#D83B01]"></div>{t.riskLevels.High}</div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#FFB900]"></div>{t.riskLevels.Caution}</div>
+        <div className="mt-2 text-slate-400 border-t border-slate-100 pt-1">{t.heatmapSizeNote}</div>
       </div>
     </div>
   );

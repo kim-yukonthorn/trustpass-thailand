@@ -2,7 +2,7 @@
 
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "@/lib/language-context";
-import { translations } from "@/lib/translations";
+import { translations, type Translations } from "@/lib/translations";
 import {
   AlertCircle,
   AlertOctagon,
@@ -972,10 +972,10 @@ function EvidenceMismatchPanel({ mismatch, onAnswer }: { mismatch: PendingMismat
           <p className="mt-3 text-sm leading-relaxed text-[#616161]">{mismatch.reason}</p>
           <div className="mt-4 flex flex-wrap gap-2 text-xs">
             <span className="rounded-xl bg-[#EFF6FC] px-2.5 py-1 font-semibold text-[#0B5394]">
-              {t.messageTopic} {formatEvidenceTopic(mismatch.message_topic)}
+              {t.messageTopic} {formatEvidenceTopic(mismatch.message_topic, t.categoryLabels)}
             </span>
             <span className="rounded-xl bg-[#FBEAE0] px-2.5 py-1 font-semibold text-[#B5340A]">
-              {t.evidenceTopic} {formatEvidenceTopic(mismatch.evidence_topic)}
+              {t.evidenceTopic} {formatEvidenceTopic(mismatch.evidence_topic, t.categoryLabels)}
             </span>
           </div>
         </div>
@@ -1071,7 +1071,7 @@ function EvidenceReadout({ evidence }: { evidence: EvidenceExtractResult }) {
           {relevanceLabel}
         </span>
         <span className="rounded-xl border border-[#E1E1E1] bg-[#FAFAFA] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#616161]">
-          {formatEvidenceTopic(detectedFields.evidence_topic)}
+          {formatEvidenceTopic(detectedFields.evidence_topic, t.categoryLabels)}
         </span>
       </div>
       <p className="mt-2 text-[11px] leading-relaxed text-[#616161]">{detectedFields.relevance_reason}</p>
@@ -1925,8 +1925,8 @@ function EvidenceChecklist({
                   type="button"
                   onClick={() => (isCustom ? removeItem(item.id) : clearItem(item.id))}
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#E1E1E1] bg-white text-[#616161] transition hover:border-[#D83B01]/40 hover:bg-[#FBEAE0] hover:text-[#B5340A] disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label={isCustom ? "Delete evidence item" : "Clear evidence item"}
-                  title={isCustom ? "Delete evidence item" : "Clear saved state, notes, and files"}
+                  aria-label={isCustom ? t.tooltipDeleteEvidence : t.tooltipClearEvidence}
+                  title={isCustom ? t.tooltipDeleteEvidence : t.tooltipClearEvidence}
                   disabled={!isCustom && !hasUserInput}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -1972,7 +1972,7 @@ function EvidenceChecklist({
                         onClick={() => removeFile(item.id, index)}
                         className="ml-1 rounded-full p-0.5 text-[#0B5394] transition hover:bg-white hover:text-[#B5340A]"
                         aria-label={`Remove ${file.name}`}
-                        title="Remove file from report"
+                        title={t.tooltipRemoveFile}
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -2148,7 +2148,7 @@ function IncidentReportSection({
 
   async function copyReport() {
     try {
-      await navigator.clipboard.writeText(buildPlainIncidentReport(result, city, evidence, generatedAt, tab));
+      await navigator.clipboard.writeText(buildPlainIncidentReport(result, city, evidence, generatedAt, tab, t));
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -2314,7 +2314,8 @@ function buildPlainIncidentReport(
   city: string,
   evidence: ReportEvidenceItem[],
   generatedAt: string,
-  language: "english" | "thai"
+  language: "english" | "thai",
+  t: Translations
 ) {
   const savedEvidence = evidence.filter((item) => item.saved || item.note.trim() || item.files.length > 0);
   if (language === "thai") {
@@ -2355,36 +2356,36 @@ function buildPlainIncidentReport(
   const summary = result.incident_report_summary.english;
 
   return [
-    "TrustPass Thailand Incident Report",
-    `Generated: ${generatedAt}`,
-    `City: ${city}`,
-    `Risk level: ${result.risk_level}`,
-    `Category: ${result.category}`,
+    t.reportTitle,
+    `${t.reportGenerated}: ${generatedAt}`,
+    `${t.reportCity}: ${city}`,
+    `${t.reportRiskLevel}: ${result.risk_level}`,
+    `${t.reportCategory}: ${result.category}`,
     "",
-    "Summary",
+    t.reportSummary,
     summary,
     "",
-    "Detected signals",
+    t.reportDetectedSignals,
     ...result.suspicious_signals.map((signal) => `- ${signal}`),
     "",
-    "Recommended next steps",
+    t.reportRecommendedSteps,
     ...result.safe_next_steps.map((step) => `- ${step}`),
     "",
-    "Evidence saved",
+    t.reportEvidenceSaved,
     ...(savedEvidence.length
       ? savedEvidence.map((item) => {
           const parts = [`- ${item.label}`];
-          if (item.note.trim()) parts.push(`Note: ${item.note.trim()}`);
-          if (item.files.length) parts.push(`Files: ${item.files.map((file) => file.name).join(", ")}`);
+          if (item.note.trim()) parts.push(`${t.reportNote}: ${item.note.trim()}`);
+          if (item.files.length) parts.push(`${t.reportFiles}: ${item.files.map((file) => file.name).join(", ")}`);
           return parts.join(" | ");
         })
-      : ["- No evidence marked as saved yet."]),
+      : [`- ${t.reportNoEvidence}`]),
     "",
-    "Contact recommendation",
+    t.reportContactRec,
     result.contact_recommendation,
     "",
-    "Disclaimer",
-    "This report summarizes risk signals for support staff, insurers, embassies, or tourist police. It is not a legal accusation."
+    t.reportDisclaimerLabel,
+    t.reportDisclaimerText
   ].join("\n");
 }
 
@@ -3088,16 +3089,6 @@ function isDashboardEligible(result: RiskCheckResult) {
   return true;
 }
 
-function formatEvidenceTopic(topic: string) {
-  const labels: Record<string, string> = {
-    transport: "Taxi / transport",
-    food_menu: "Food / menu",
-    tour_payment: "Tour payment",
-    qr_payment: "QR payment",
-    rental_document: "Rental document",
-    damage_claim: "Damage claim",
-    job_lure: "Job / casting risk",
-    unknown: "Unknown"
-  };
-  return labels[topic] || "Unknown";
+function formatEvidenceTopic(topic: string, labels: Record<string, string>) {
+  return labels[topic] ?? labels.unknown ?? topic;
 }

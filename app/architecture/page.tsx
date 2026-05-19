@@ -1,22 +1,28 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, Bot, CheckCircle2, Cloud, Database, FileScan, ShieldCheck } from "lucide-react";
 import { SiteNav } from "@/components/SiteNav";
-import { azureServices } from "@/lib/demo-content";
+import { useLanguage } from "@/lib/language-context";
+import { translations } from "@/lib/translations";
 
 export default function ArchitecturePage() {
+  const { lang } = useLanguage();
+  const t = translations[lang];
+
   return (
     <main>
       <SiteNav />
       <section className="border-b border-fluent-border bg-white">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
           <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-azure">Azure AI Architecture</p>
-            <h1 className="mt-2 text-4xl font-bold text-ink">Azure AI powers OCR and reasoning after deterministic grounding.</h1>
+            <p className="text-sm font-bold uppercase tracking-wide text-azure">{t.architecturePageKicker}</p>
+            <h1 className="mt-2 text-4xl font-bold text-ink">{t.architecturePageH1}</h1>
             <p className="mt-4 text-base leading-7 text-fluent-muted">
-              TrustPass combines tourist-provided situation details, uploaded evidence, Azure Document Intelligence OCR, local tourism-grounding tools, and Azure OpenAI reasoning to produce safer next steps before tourists pay, travel, or follow instructions.
+              {t.architecturePageDesc}
             </p>
             <Link href="/check" className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-azure px-5 py-3 text-sm font-bold text-white transition hover:bg-fluent-blueDark">
-              Test the live flow
+              {t.testLiveFlow}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -27,7 +33,7 @@ export default function ArchitecturePage() {
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-5 px-4 py-8 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8">
-        {azureServices.map((service) => (
+        {t.azureServices.map((service) => (
           <div key={service.title} className="rounded-[8px] border border-fluent-border bg-white p-5 shadow-sm">
             <Bot className="h-6 w-6 text-azure" />
             <p className="mt-3 font-bold text-ink">{service.title}</p>
@@ -38,9 +44,14 @@ export default function ArchitecturePage() {
 
       <section className="border-y border-fluent-border bg-white">
         <div className="mx-auto grid max-w-7xl gap-5 px-4 py-8 sm:px-6 lg:grid-cols-3 lg:px-8">
-          <ArchitectureCard icon={<FileScan />} title="Evidence processing" items={["Azure Document Intelligence extracts OCR text from screenshots, menus, receipts, contracts, and PDFs", "OCR hints are shown to the user as supporting evidence", "Weak or unrelated evidence is ignored instead of being forced into the score"]} />
-          <ArchitectureCard icon={<Cloud />} title="Risk reasoning" items={["Deterministic grounding runs before Azure OpenAI", "Azure OpenAI receives structured in-scope context and grounding signals", "The result is rendered as a consistent action card and help report"]} />
-          <ArchitectureCard icon={<Database />} title="Trust data layer" items={["Tourism scam and fraud risk patterns", "Bangkok food tiers, taxi fare references, venue and event context", "Dashboard records only eligible Caution, High, and Emergency cases"]} />
+          {t.architectureCards.map((card, i) => (
+            <ArchitectureCard
+              key={card.title}
+              icon={i === 0 ? <FileScan /> : i === 1 ? <Cloud /> : <Database />}
+              title={card.title}
+              items={card.items}
+            />
+          ))}
         </div>
       </section>
 
@@ -48,15 +59,10 @@ export default function ArchitecturePage() {
         <div className="rounded-[8px] border border-blue-100 bg-[#EAF4FE] p-6">
           <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-azure">
             <ShieldCheck className="h-4 w-4" />
-            Responsible Trust Workflow
+            {t.responsibleTrustKicker}
           </p>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
-            {[
-              "The app flags risk signals without declaring a business guilty.",
-              "Tourists receive verification steps before payment or travel.",
-              "High-risk situations produce clear escalation guidance.",
-              "Aggregated Caution, High, and Emergency signals help tourism stakeholders understand where trust is breaking down."
-            ].map((item) => (
+            {t.responsibleTrustItems.map((item) => (
               <div key={item} className="flex gap-3 rounded-[8px] bg-white p-4 text-sm leading-6 text-fluent-muted">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-trust" />
                 {item}

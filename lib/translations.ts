@@ -413,6 +413,167 @@ const en = {
   timeAgoMins: (n: number) => `${n}m ago`,
   timeAgoHours: (n: number) => `${n}h ago`,
   timeAgoDays: (n: number) => `${n}d ago`,
+
+  // Dashboard intelligence category labels (from intelligence store / AI output)
+  dashboardCategoryLabels: {
+    taxi_overcharging: "Taxi overcharging",
+    tour_payment_fraud: "Tour payment fraud",
+    rental_passport_retention: "Rental passport retention",
+    qr_payment_fraud: "QR payment fraud",
+    fake_job_lure: "Fake job / casting lure",
+    rental_damage_pressure: "Rental damage pressure",
+    food_price_overcharge: "Food price overcharge"
+  } as Record<string, string>,
+
+  // Heatmap legend and tooltip
+  heatmapTrackedRisk: "Tracked Risk",
+  heatmapSizeNote: "Size = Report Count",
+  heatmapHighestSeen: "Highest seen",
+  heatmapTotalCases: "Total Cases",
+  heatmapMapStatus: "Map status",
+  heatmapTopIssue: "Top Issue",
+  heatmapAllCaseTypes: "All case types",
+
+  // Scenarios page
+  scenariosPageKicker: "Guided Product Scenarios",
+  scenariosPageH1: "Major tourist scam categories TrustPass can detect.",
+  scenariosPageDesc: "Each category shows how the product combines situation details, evidence extraction, grounded risk checks, clarification, Thai phrase support, and incident reporting.",
+  scenarioLabel: (index: number) => `Scenario ${index + 1}`,
+  blockTouristQuestion: "What a tourist might ask",
+  blockEvidenceType: "Evidence type",
+  blockTrustPassDoes: "What TrustPass does",
+  blockWhyItMatters: "Why it matters",
+  scenarioSignalsHeader: "Detected signals",
+  recommendedWalkthrough: "Recommended walkthrough",
+  recommendedWalkthroughDesc: "Start with payment or transport, then try food/menu clarification, and finish with fake job/casting emergency luring.",
+  scenariosFullData: [
+    {
+      id: "transport",
+      title: "Transport overcharging and detours",
+      riskRange: "Low to High",
+      touristInput: "A taxi says the meter is broken, or a tuk-tuk says the temple is closed and wants to stop at a shop.",
+      evidenceType: "Route, fare quote, taxi plate, chat, location context",
+      signals: ["meter refusal", "fixed fare above route baseline", "attraction-closed detour", "shop commission stop"],
+      trustPassDoes: "Compares route/fare context, separates normal cheap fares from suspicious quotes, and gives calm Thai phrases.",
+      whyItMatters: "Transport scams are frequent trust leaks, but the app should not over-warn when a fare is normal."
+    },
+    {
+      id: "food-menu",
+      title: "Food and menu price verification",
+      riskRange: "Low to Caution",
+      touristInput: "This menu looks expensive. Is 1,500 baht for crab omelette normal here?",
+      evidenceType: "Menu photo, OCR text, restaurant name, GPS or venue context",
+      signals: ["menu item prices", "venue tier", "premium/famous venue context", "missing venue confirmation"],
+      trustPassDoes: "Extracts all visible menu items, compares each item against the likely venue tier, and asks for venue clarification when needed.",
+      whyItMatters: "High prices can be normal at famous venues but suspicious at local stalls. Venue context is the key."
+    },
+    {
+      id: "payment",
+      title: "Tour, QR, and payment fraud",
+      riskRange: "Caution to High",
+      touristInput: "A tour seller asks for full payment to a personal account, or a QR code name does not match the business.",
+      evidenceType: "LINE/WhatsApp screenshot, flyer, QR screen, account name, receipt",
+      signals: ["full advance payment", "personal or mismatched account", "missing license", "time pressure"],
+      trustPassDoes: "Prioritizes payment fraud grounding over unrelated OCR noise and recommends verification before money leaves the account.",
+      whyItMatters: "Payment identity and operator legitimacy are central to avoiding fake bookings and refund disputes."
+    },
+    {
+      id: "rental-documents",
+      title: "Rental passport and document risk",
+      riskRange: "Caution to High",
+      touristInput: "A motorbike or scooter rental shop wants to keep my original passport as a deposit.",
+      evidenceType: "Rental contract, receipt, passport clause, shop name",
+      signals: ["original passport requested", "unclear deposit terms", "vehicle rental leverage"],
+      trustPassDoes: "Flags document leverage risk and suggests safer alternatives such as passport copy plus written deposit terms.",
+      whyItMatters: "Passport leverage can turn a minor rental issue into a serious traveler safety problem."
+    },
+    {
+      id: "rental-damage",
+      title: "Rental damage cash pressure",
+      riskRange: "High",
+      touristInput: "A jet ski or motorbike shop claims damage and demands cash now with no receipt or neutral inspection.",
+      evidenceType: "Damage photo, rental contract, chat/cash demand, receipt refusal",
+      signals: ["large cash demand", "no receipt or written estimate", "pressure to avoid neutral process"],
+      trustPassDoes: "Separates legitimate damage documentation from pressure patterns and recommends written estimates, photos, and neutral help.",
+      whyItMatters: "Legitimate damage claims need documentation. TrustPass guides tourists toward receipts, inspection, insurer/platform help, and safe escalation."
+    },
+    {
+      id: "job-lure",
+      title: "Fake job or casting emergency luring",
+      riskRange: "Emergency",
+      touristInput: "A recruiter offers paid casting, free pickup, secrecy, and travel toward Mae Sot or the border.",
+      evidenceType: "WeChat/LINE chat, profile, phone number, pickup point, route instruction",
+      signals: ["controlled pickup", "border travel", "secrecy or isolation", "informal recruiter"],
+      trustPassDoes: "Treats the combination as a stop-now emergency and generates evidence to save for hotel, police, or embassy help.",
+      whyItMatters: "This connects directly to the trust crisis around fake job/casting luring and cross-border scam-compound fears."
+    }
+  ] as Array<{ id: string; title: string; riskRange: string; touristInput: string; evidenceType: string; signals: string[]; trustPassDoes: string; whyItMatters: string }>,
+
+  // Architecture page
+  architecturePageKicker: "Azure AI Architecture",
+  architecturePageH1: "Azure AI powers OCR and reasoning after deterministic grounding.",
+  architecturePageDesc: "TrustPass combines tourist-provided situation details, uploaded evidence, Azure Document Intelligence OCR, local tourism-grounding tools, and Azure OpenAI reasoning to produce safer next steps before tourists pay, travel, or follow instructions.",
+  testLiveFlow: "Test the live flow",
+  architectureCards: [
+    {
+      title: "Evidence processing",
+      items: [
+        "Azure Document Intelligence extracts OCR text from screenshots, menus, receipts, contracts, and PDFs",
+        "OCR hints are shown to the user as supporting evidence",
+        "Weak or unrelated evidence is ignored instead of being forced into the score"
+      ]
+    },
+    {
+      title: "Risk reasoning",
+      items: [
+        "Deterministic grounding runs before Azure OpenAI",
+        "Azure OpenAI receives structured in-scope context and grounding signals",
+        "The result is rendered as a consistent action card and help report"
+      ]
+    },
+    {
+      title: "Trust data layer",
+      items: [
+        "Tourism scam and fraud risk patterns",
+        "Bangkok food tiers, taxi fare references, venue and event context",
+        "Dashboard records only eligible Caution, High, and Emergency cases"
+      ]
+    }
+  ] as Array<{ title: string; items: string[] }>,
+  responsibleTrustKicker: "Responsible Trust Workflow",
+  responsibleTrustItems: [
+    "The app flags risk signals without declaring a business guilty.",
+    "Tourists receive verification steps before payment or travel.",
+    "High-risk situations produce clear escalation guidance.",
+    "Aggregated Caution, High, and Emergency signals help tourism stakeholders understand where trust is breaking down."
+  ] as string[],
+
+  // TrustPassChat gaps
+  categoryLabels: {
+    transport: "Taxi / transport",
+    food_menu: "Food / menu",
+    tour_payment: "Tour payment",
+    qr_payment: "QR payment",
+    rental_document: "Rental document",
+    damage_claim: "Damage claim",
+    job_lure: "Job / casting risk",
+    unknown: "Unknown"
+  } as Record<string, string>,
+  reportTitle: "TrustPass Thailand Incident Report",
+  reportGenerated: "Generated",
+  reportSummary: "Summary",
+  reportDetectedSignals: "Detected signals",
+  reportRecommendedSteps: "Recommended next steps",
+  reportEvidenceSaved: "Evidence saved",
+  reportNoEvidence: "No evidence marked as saved yet.",
+  reportContactRec: "Contact recommendation",
+  reportDisclaimerLabel: "Disclaimer",
+  reportDisclaimerText: "This report summarizes risk signals for support staff, insurers, embassies, or tourist police. It is not a legal accusation.",
+  evidenceStatusSaved: "Saved",
+  evidenceStatusPending: "Still recommended",
+  tooltipDeleteEvidence: "Delete evidence item",
+  tooltipClearEvidence: "Clear saved state, notes, and files",
+  tooltipRemoveFile: "Remove file from report",
 };
 
 const zh: typeof en = {
@@ -534,7 +695,7 @@ const zh: typeof en = {
   printSavePdf: "打印 / 另存为PDF",
   downloadReport: "下载可打印报告",
   copyReport: "复制报告",
-  incidentTabLabel: "中文",
+  incidentTabLabel: "英文",
   incidentTabThai: "泰文",
 
   // Footer
@@ -826,6 +987,167 @@ const zh: typeof en = {
   timeAgoMins: (n: number) => `${n}分钟前`,
   timeAgoHours: (n: number) => `${n}小时前`,
   timeAgoDays: (n: number) => `${n}天前`,
+
+  // Dashboard intelligence category labels
+  dashboardCategoryLabels: {
+    taxi_overcharging: "出租车宰客",
+    tour_payment_fraud: "旅游付款诈骗",
+    rental_passport_retention: "租赁护照扣押",
+    qr_payment_fraud: "QR码付款诈骗",
+    fake_job_lure: "虚假招聘/选角诱骗",
+    rental_damage_pressure: "租赁损坏施压",
+    food_price_overcharge: "餐饮价格欺诈"
+  } as Record<string, string>,
+
+  // Heatmap legend and tooltip
+  heatmapTrackedRisk: "风险追踪",
+  heatmapSizeNote: "圆点大小 = 报告数量",
+  heatmapHighestSeen: "最高风险",
+  heatmapTotalCases: "案例总数",
+  heatmapMapStatus: "地图状态",
+  heatmapTopIssue: "主要问题",
+  heatmapAllCaseTypes: "所有案例类型",
+
+  // Scenarios page
+  scenariosPageKicker: "精选产品场景",
+  scenariosPageH1: "TrustPass 能够检测的主要旅游诈骗类别。",
+  scenariosPageDesc: "每个类别展示了产品如何综合情况描述、证据提取、基准风险核查、澄清问答、泰语短语支持和事件报告等功能。",
+  scenarioLabel: (index: number) => `场景 ${index + 1}`,
+  blockTouristQuestion: "游客可能会问什么",
+  blockEvidenceType: "证据类型",
+  blockTrustPassDoes: "TrustPass 如何处理",
+  blockWhyItMatters: "为什么重要",
+  scenarioSignalsHeader: "检测到的信号",
+  recommendedWalkthrough: "推荐体验流程",
+  recommendedWalkthroughDesc: "建议从付款或交通场景开始，然后尝试餐饮/菜单价格核查，最后体验虚假招聘/选角紧急诱骗场景。",
+  scenariosFullData: [
+    {
+      id: "transport",
+      title: "交通宰客与绕路",
+      riskRange: "低至高",
+      touristInput: "出租车司机说计价器坏了，或者嘟嘟车说寺庙关门了，要带我去一家商店。",
+      evidenceType: "路线、报价、出租车车牌、聊天记录、位置信息",
+      signals: ["拒绝使用计价器", "固定收费高于路线基准价", "以景点关闭为由绕道", "带客进入佣金商店"],
+      trustPassDoes: "比对路线/收费背景信息，区分正常低价与可疑报价，并提供冷静的泰语短语。",
+      whyItMatters: "交通诈骗是常见的信任漏洞，但当收费正常时，应用不应过度预警。"
+    },
+    {
+      id: "food-menu",
+      title: "餐饮与菜单价格核查",
+      riskRange: "低至注意",
+      touristInput: "这份菜单看起来很贵，这里的螃蟹炒蛋要1500泰铢正常吗？",
+      evidenceType: "菜单照片、OCR文字、餐厅名称、GPS或场所信息",
+      signals: ["菜单项目价格", "场所档次", "高端/知名场所背景", "缺少场所确认"],
+      trustPassDoes: "提取所有可见菜单项目，与可能的场所档次进行比较，并在需要时要求澄清场所信息。",
+      whyItMatters: "高价在知名场所可能属于正常，但在路边摊则属可疑。场所背景是关键。"
+    },
+    {
+      id: "payment",
+      title: "旅游、QR码与付款诈骗",
+      riskRange: "注意至高危",
+      touristInput: "旅游卖家要求全额打款到个人账户，或QR码账户名称与商家不符。",
+      evidenceType: "LINE/WhatsApp截图、传单、QR码截图、账户名称、收据",
+      signals: ["全额预付款", "个人或不匹配账户", "缺少执照", "时间压力"],
+      trustPassDoes: "优先处理付款诈骗基准信号，排除无关OCR噪音，并建议在转账前进行核实。",
+      whyItMatters: "付款身份和运营商合规性是避免虚假预订和退款纠纷的核心。"
+    },
+    {
+      id: "rental-documents",
+      title: "租赁护照与证件风险",
+      riskRange: "注意至高危",
+      touristInput: "摩托车或踏板车租赁店要扣押我的原版护照作为押金。",
+      evidenceType: "租赁合同、收据、护照条款、店铺名称",
+      signals: ["要求提供原版护照", "押金条款不明确", "车辆租赁胁迫"],
+      trustPassDoes: "标记证件胁迫风险，并建议更安全的替代方案，如护照复印件加书面押金条款。",
+      whyItMatters: "护照胁迫可能将小型租赁问题升级为严重的旅行安全问题。"
+    },
+    {
+      id: "rental-damage",
+      title: "租赁损坏现金施压",
+      riskRange: "高危",
+      touristInput: "摩托艇或摩托车租赁店索赔损坏费，要求立即付现金，不提供收据或中立检验。",
+      evidenceType: "损坏照片、租赁合同、聊天/现金要求、拒绝开收据",
+      signals: ["大额现金要求", "无收据或书面估价", "施压回避中立流程"],
+      trustPassDoes: "将合理的损坏证明与施压模式区分开来，并建议书面估价、拍照和寻求中立帮助。",
+      whyItMatters: "合理的损坏索赔需要文件证明。TrustPass 引导游客索取收据、检验报告、保险人/平台帮助及安全升级渠道。"
+    },
+    {
+      id: "job-lure",
+      title: "虚假招聘/选角紧急诱骗",
+      riskRange: "紧急",
+      touristInput: "一名招募者提供有偿选角、免费接机、要求保密，并前往美索或边境地区。",
+      evidenceType: "微信/LINE聊天记录、个人资料、电话号码、接送地点、路线指示",
+      signals: ["受控接送", "边境出行", "保密或隔离要求", "非正规招募者"],
+      trustPassDoes: "将上述组合视为立即停止的紧急信号，并生成可交给酒店、警察或大使馆的证据材料。",
+      whyItMatters: "这与围绕虚假招聘/选角诱骗和跨境诈骗园区的信任危机直接相关。"
+    }
+  ] as Array<{ id: string; title: string; riskRange: string; touristInput: string; evidenceType: string; signals: string[]; trustPassDoes: string; whyItMatters: string }>,
+
+  // Architecture page
+  architecturePageKicker: "Azure AI 架构",
+  architecturePageH1: "Azure AI 在确定性数据接地后驱动OCR和推理。",
+  architecturePageDesc: "TrustPass 综合游客提供的情况描述、上传的证据、Azure 文档智能OCR、本地旅游接地工具和 Azure OpenAI 推理，在游客付款、出行或遵从指示之前提供更安全的建议。",
+  testLiveFlow: "测试实时流程",
+  architectureCards: [
+    {
+      title: "证据处理",
+      items: [
+        "Azure 文档智能从截图、菜单、收据、合同和PDF中提取OCR文字",
+        "OCR提示作为佐证证据展示给用户",
+        "弱相关或不相关的证据将被忽略，而不是强制纳入评分"
+      ]
+    },
+    {
+      title: "风险推理",
+      items: [
+        "确定性数据接地在 Azure OpenAI 之前运行",
+        "Azure OpenAI 接收结构化的范围内背景和接地信号",
+        "结果以一致的行动卡片和求助报告形式呈现"
+      ]
+    },
+    {
+      title: "信任数据层",
+      items: [
+        "旅游诈骗与欺诈风险模式",
+        "曼谷餐饮档次、出租车收费参考、场所和活动背景",
+        "仪表盘仅记录符合条件的警告、高风险和紧急案例"
+      ]
+    }
+  ] as Array<{ title: string; items: string[] }>,
+  responsibleTrustKicker: "负责任的信任工作流程",
+  responsibleTrustItems: [
+    "应用标记风险信号，而不是宣告商家有罪。",
+    "游客在付款或出行前获得核实步骤。",
+    "高风险情况提供清晰的升级指引。",
+    "汇总的警告、高风险和紧急信号帮助旅游利益相关方了解信任危机发生的地点。"
+  ] as string[],
+
+  // TrustPassChat gaps
+  categoryLabels: {
+    transport: "出租车 / 交通",
+    food_menu: "餐饮 / 菜单",
+    tour_payment: "旅游付款",
+    qr_payment: "QR码付款",
+    rental_document: "租赁证件",
+    damage_claim: "损坏索赔",
+    job_lure: "招聘 / 选角风险",
+    unknown: "未知"
+  } as Record<string, string>,
+  reportTitle: "TrustPass 泰国事件报告",
+  reportGenerated: "生成时间",
+  reportSummary: "摘要",
+  reportDetectedSignals: "检测到的信号",
+  reportRecommendedSteps: "建议下一步行动",
+  reportEvidenceSaved: "已保存的证据",
+  reportNoEvidence: "尚未标记任何已保存的证据。",
+  reportContactRec: "联系建议",
+  reportDisclaimerLabel: "免责声明",
+  reportDisclaimerText: "本报告汇总风险信号，供酒店员工、保险人、大使馆或旅游警察参考，不构成法律指控。",
+  evidenceStatusSaved: "已保存",
+  evidenceStatusPending: "仍建议保存",
+  tooltipDeleteEvidence: "删除证据项",
+  tooltipClearEvidence: "清除已保存状态、备注和文件",
+  tooltipRemoveFile: "从报告中移除文件",
 };
 
 export const translations: Record<UILang, typeof en> = { en, zh };
